@@ -24,3 +24,5 @@ pytokens==0.3.0
 SQLAlchemy==2.0.44
 typing_extensions==4.15.0
 yarl==1.22.0
+pydantic==2.9.2
+PyJWT==2.10.1

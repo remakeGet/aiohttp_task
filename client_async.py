@@ -10,6 +10,38 @@ async def test_api():
         print("🚀 Запуск теста REST API для объявлений (aiohttp)")
         print("="*60)
         
+        # Сначала регистрируем и логинимся
+        print("\n0. 🔐 РЕГИСТРАЦИЯ И АУТЕНТИФИКАЦИЯ:")
+        
+        # Регистрация
+        async with session.post(
+            f"{BASE}/register",
+            json={
+                "email": "test@example.com",
+                "password": "password123"
+            }
+        ) as resp:
+            data = await resp.json() if resp.status == 200 else await resp.text()
+            print(f"POST /register -> {resp.status}: {data}")
+        
+        # Логин для получения токена
+        async with session.post(
+            f"{BASE}/login",
+            json={
+                "email": "test@example.com",
+                "password": "password123"
+            }
+        ) as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                token = data.get('token')
+                print(f"POST /login -> {resp.status}: Token получен")
+            else:
+                print(f"POST /login -> {resp.status}: {await resp.text()}")
+                return
+        
+        headers = {"Authorization": f"Bearer {token}"}
+        
         # 1. Создание объявлений
         print("\n1. 📝 СОЗДАНИЕ ОБЪЯВЛЕНИЙ:")
         for i in range(3):
@@ -17,9 +49,9 @@ async def test_api():
                 f"{BASE}/advertisements",
                 json={
                     "title": f"Продам товар {i+1}",
-                    "description": f"Отличное состояние, новый",
-                    "owner": f"Продавец {i+1}"
-                }
+                    "description": f"Отличное состояние, новый"
+                },
+                headers=headers
             ) as resp:
                 data = await resp.json() if resp.status == 201 else await resp.text()
                 emoji = "🟢" if resp.status == 201 else "🔴"
@@ -32,7 +64,7 @@ async def test_api():
                 data = await resp.json()
                 print(f"🟢 GET /advertisements -> {resp.status}: Всего {data['total']} объявлений")
                 for i, ad in enumerate(data['advertisements'], 1):
-                    print(f"   {i}. [{ad['id']}] {ad['title']} - {ad['owner']}")
+                    print(f"   {i}. [{ad['id']}] {ad['title']} - user_id: {ad['user_id']}")
             else:
                 print(f"🔴 GET /advertisements -> {resp.status}: {await resp.text()}")
         
@@ -47,16 +79,20 @@ async def test_api():
         
         # 4. Удаление
         print("\n4. 🗑️ УДАЛЕНИЕ:")
-        # Сначала получим ID первого объявления
         async with session.get(f"{BASE}/advertisements") as resp:
             if resp.status == 200:
                 data = await resp.json()
                 if data['advertisements']:
                     ad_id = data['advertisements'][0]['id']
-                    async with session.delete(f"{BASE}/advertisements/{ad_id}") as del_resp:
-                        data = await del_resp.json() if del_resp.status == 200 else await del_resp.text()
-                        emoji = "🟢" if del_resp.status == 200 else "🔴"
-                        print(f"{emoji} DELETE /advertisements/{ad_id} -> {del_resp.status}: {data}")
+                    async with session.delete(
+                        f"{BASE}/advertisements/{ad_id}",
+                        headers=headers
+                    ) as del_resp:
+                        if del_resp.status == 204:
+                            print(f"🟢 DELETE /advertisements/{ad_id} -> {del_resp.status}: No Content")
+                        else:
+                            data = await del_resp.text()
+                            print(f"🔴 DELETE /advertisements/{ad_id} -> {del_resp.status}: {data}")
         
         # 5. Финальная проверка
         print("\n5. 📊 ИТОГОВАЯ СТАТИСТИКА:")
@@ -71,37 +107,5 @@ async def test_api():
         print("✅ Асинхронное тестирование завершено!")
 
 
-async def test_html_responses():
-    """Тестирование HTML ответов"""
-    BASE = "http://localhost:8080"
-    
-    print("\n🌐 Тестирование HTML ответов:")
-    print("-" * 40)
-    
-    async with aiohttp.ClientSession() as session:
-        # Главная страница
-        async with session.get(BASE, headers={'Accept': 'text/html'}) as resp:
-            if resp.status == 200:
-                print("🟢 Главная страница (HTML) работает")
-        
-        # Список объявлений в HTML
-        async with session.get(
-            f"{BASE}/advertisements", 
-            headers={'Accept': 'text/html'}
-        ) as resp:
-            if resp.status == 200:
-                print("🟢 Список объявлений (HTML) работает")
-        
-        # Поиск в HTML
-        async with session.get(
-            f"{BASE}/advertisements/search?q=товар",
-            headers={'Accept': 'text/html'}
-        ) as resp:
-            if resp.status == 200:
-                print("🟢 Поиск объявлений (HTML) работает")
-
-
 if __name__ == "__main__":
-    # Запускаем оба теста
     asyncio.run(test_api())
-    # asyncio.run(test_html_responses())  # Раскомментируй для теста HTML
